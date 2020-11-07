@@ -1,0 +1,33 @@
+[package]
+name = "thomas"
+version = "1.0.2"
+authors = ["Nobody <null@undefined.nil>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
+
+[dependencies]
+aes-gcm="0.8.0"
+async-std = "1.6.5"
+async-tungstenite = { version = "0.10.0", features = ["async-std-runtime", "async-native-tls"] }
+bytes = "0.6.0"
+chrono = "0.4"
+clap = "~2.33"
+ctrlc = "3.1.7"
+env_logger = "0.8.1"
+futures = "~0.3.5"
+lazy_static = "~1.4.0"
+log = "0.4.11"
+openssl-probe = "0.1.2"
+rand = "0.7"
+serde = { version = "1.0.104", features = ["derive"] }
+serde_json = "1.0.48"
+sha2 = "0.9.1"

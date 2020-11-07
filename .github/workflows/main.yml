@@ -1,0 +1,108 @@
+name: main
+
+on: 
+  create
+
+env:
+  projName: Thomas
+  verStr: '1.0.2'
+  desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
+
+jobs:
+  create_release:
+    name: Create release
+    runs-on: windows-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.verStr }}
+          release_name: 'v${{ env.verStr }}'
+          draft: true
+          prerelease: false
+
+  build_ubuntu:
+    name: build ubuntu binaries
+    runs-on: ubuntu-latest
+    needs: create_release
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v2.3.3
+
+      - name: Docker build
+        shell: bash
+        run: |
+          ARCHS=('armv7.musleabi' 'i686.musl' 'x86_64.musl')
+          for arch in "${ARCHS[@]}"
+          do
+            left="${arch%.*}"
+            right="${arch#*.}"
+            echo "${arch}=${left}.${right}"
+            image="getsentry/rust-musl-cross:${left}-${right}"
+            docker pull ${image}
+            docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release
+            arch="${left}-unknown-linux-${right}"
+            zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
+          done
+
+      - name: Upload i686
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-i686.zip
+          asset_name: $thomas-linux-i686.zip
+          asset_content_type: application/zip
+
+      - name: Upload x86_64
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-x86_64.zip
+          asset_name: $thomas-linux-x86_64.zip
+          asset_content_type: application/zip
+
+      - name: Upload armv7
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-armv7.zip
+          asset_name: $thomas-linux-armv7.zip
+          asset_content_type: application/zip
+
+  build_windows:
+    name: build windows binaries
+    runs-on: windows-latest
+    needs: create_release
+
+    steps:        
+      - name: Checkout master
+        uses: actions/checkout@v2.3.3
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Create assets
+        shell: pwsh
+        run: Compress-Archive -Path target/release/*.exe thomas-win-x86_64.zip
+
+      - name: Upload assets
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-win-x86_64.zip
+          asset_name: thomas-win-x86_64.zip
+          asset_content_type: application/zip
