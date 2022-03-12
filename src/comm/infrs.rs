@@ -291,7 +291,7 @@ async fn copy_udp2ws(
     Ok(())
 }
 
-pub async fn pump_udp2ws(
+pub async fn pump_udp_ws(
     udp_socket: UdpSocket,
     ws_stream: WebSocketStream<ConnectStream>,
     sig_close: std::sync::Arc<std::sync::atomic::AtomicBool>,

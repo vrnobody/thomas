@@ -22,4 +22,4 @@ client -c client.json
 服务端如果放公网需要前置Nginx/Caddy做TLS终结，相应的`addr`配置项由`ws://...`改为`wss://...`。这个软件没对数据流做任何加密，所以不要作死直接放公网。  
 
 #### 编译
-[Release](https://github.com/vrnobody/thomas/releases/latest)页面有编译好的Windows、Linux、ARM等二进制文件。其他架构需自行安装Rust，然后输入`cargo build --release`进行编译。最后生成的程序文件位于`target/release`目录内。  
+[Release](https://github.com/vrnobody/thomas/releases/latest)页面有编译好的Windows、Linux、ARM等二进制文件。其他架构需自行安装Rust，然后输入`cargo build --release`进行编译。最后生成的程序文件位于`target/release`目录内。mips架构暂时无法编译。  

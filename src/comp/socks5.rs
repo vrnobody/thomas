@@ -152,7 +152,7 @@ fn make_chain(
     target: String,
 ) -> (Vec<String>, String) {
     let tail = models::HeaderFrame {
-        cmd: cmd,
+        cmd,
         desc: "".to_string(),
         param: target,
     };
@@ -226,7 +226,7 @@ async fn handle_udp_assoc(cfgs: &models::ClientConfigs, expt: String, local: Tcp
                 match dial(cfgs, models::Cmds::UdpAssoc, &"").await {
                     Ok(ws_stream) => {
                         debug!("pumping...");
-                        let _ = infrs::pump_udp2ws(socket, ws_stream, sig_recv).await;
+                        let _ = infrs::pump_udp_ws(socket, ws_stream, sig_recv).await;
                         return;
                     }
                     _ => {}

@@ -11,13 +11,18 @@ pub fn register_ctrl_c_handler() {
     .expect("error setting Ctrl-C handler");
 }
 
-pub fn parse_cmd_args(desc: String, ver: &String) -> String {
-    use std::io::Read;
+pub fn parse_cmd_args(is_server: bool) -> String {
 
-    let title = format!("Thomas - {}", desc);
+    use std::io::Read;
+    use clap::AppSettings;
+
+    let name = crate::comm::cons::PKG_NAME;
+    let ty = if is_server { "server" } else { "client" };
+    let title = format!("{} {}", name, ty);
     let matches = clap::App::new(title)
-        .version(ver.as_str())
-        .author("Nobody <null@undefined.nil>")
+        .setting(AppSettings::ArgRequiredElseHelp)
+        .version(crate::comm::cons::VERSION)
+        .author(crate::comm::cons::AUTHORS)
         .args_from_usage("-c, --config=[FILE] 'Load config from file'")
         .args_from_usage("-s, --stdin 'Read config from stdin'")
         .get_matches();

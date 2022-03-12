@@ -38,18 +38,49 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          ARCHS=('armv7.musleabi' 'i686.musl' 'x86_64.musl')
+          ARCHS=('aarch64.musl' 'arm.musleabi' 'armv7.musleabi' 'i686.musl' 'x86_64.musl')
           for arch in "${ARCHS[@]}"
           do
             left="${arch%.*}"
             right="${arch#*.}"
-            echo "${arch}=${left}.${right}"
-            image="getsentry/rust-musl-cross:${left}-${right}"
+            echo
+            echo "${arch}=${left}-${right}"
+            image="messense/rust-musl-cross:${left}-${right}"
             docker pull ${image}
             docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release
             arch="${left}-unknown-linux-${right}"
             zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
           done
+
+      - name: Upload aarch64
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-aarch64.zip
+          asset_name: $thomas-linux-aarch64.zip
+          asset_content_type: application/zip
+
+      - name: Upload arm
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-arm.zip
+          asset_name: $thomas-linux-arm.zip
+          asset_content_type: application/zip
+
+      - name: Upload armv7
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-armv7.zip
+          asset_name: $thomas-linux-armv7.zip
+          asset_content_type: application/zip
 
       - name: Upload i686
         uses: actions/upload-release-asset@v1.0.1
@@ -69,16 +100,6 @@ jobs:
           upload_url: ${{ needs.create_release.outputs.upload_url }} 
           asset_path: ./thomas-linux-x86_64.zip
           asset_name: $thomas-linux-x86_64.zip
-          asset_content_type: application/zip
-
-      - name: Upload armv7
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }} 
-          asset_path: ./thomas-linux-armv7.zip
-          asset_name: $thomas-linux-armv7.zip
           asset_content_type: application/zip
 
   build_windows:
