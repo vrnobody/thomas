@@ -14,6 +14,7 @@ use async_tungstenite::{
 use futures::{join, AsyncReadExt, AsyncWriteExt, SinkExt, StreamExt};
 use log::*;
 use std::time::Duration;
+use crate::comm::cons::BUFF_LEN;
 
 // start from ATYPE, then ADDRESS and PORT
 pub fn socket_addr_to_vec(socket_addr: std::net::SocketAddr) -> Vec<u8> {
@@ -46,20 +47,23 @@ async fn send_msg_to_ws_sink(
     match msg {
         Message::Close(_) => finished,
         Message::Binary(buff) => {
-            if buff.len() < 1 {
-                finished
-            } else {
+            if buff.len() > 0 {
                 dest.send(Message::Binary(buff)).await
+            } else {
+                finished
             }
         },
         Message::Text(txt) => {
-            if txt.len() < 1 {
-                finished
-            } else {
+            if txt.len() > 0 {
                 dest.send(Message::Text(txt)).await
+            } else {
+                finished
             }
         },
-        Message::Ping(_) => Ok(()),
+        Message::Ping(_) =>{ 
+            debug!("send_msg_to_ws_sink: Ping()");
+            Ok(())
+        },
         _ => finished,
     }
 }
@@ -74,7 +78,6 @@ async fn send_msg_to_tcp_write_half(
     ));
 
     match msg {
-        Message::Close(_) => finished,
         Message::Binary(buff) => {
             if buff.len() < 1 {
                 finished
@@ -100,12 +103,10 @@ async fn copy_ws_ws(
     dest: &mut futures::stream::SplitSink<WebSocketStream<ConnectStream>, Message>,
     span: Duration,
 ) {
-    while let Ok(result) = timeout(span, source.next()).await {
-        if let Some(Ok(msg)) = result {
-            if let Ok(Ok(_)) = timeout(span, send_msg_to_ws_sink(msg, dest)).await {
-                continue;
-            }
-        }
+    while let Ok(Some(Ok(msg))) = timeout(span, source.next()).await {
+        if let Ok(Ok(_)) = timeout(span, send_msg_to_ws_sink(msg, dest)).await {
+            continue;
+        }    
         break;
     }
 }
@@ -181,7 +182,7 @@ pub async fn send_udp_pkg(sender: &UdpSocket, buf: &Vec<u8>) {
     }
 }
 
-pub async fn pump_ws2udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: UdpSocket) {
+pub async fn pump_ws_udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: UdpSocket) {
     let udp_sender = std::sync::Arc::new(udp_socket);
     let udp_reader = udp_sender.clone();
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
@@ -200,8 +201,14 @@ pub async fn pump_ws2udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: 
                             continue;
                         }
                     },
-                    Message::Ping(_) => continue,
-                    Message::Pong(_) => continue,
+                    Message::Ping(_) => {
+                        debug!("pump_ws_udp: Ping()");
+                        continue;
+                    },
+                    Message::Pong(_) => {
+                        debug!("pump_ws_udp: Pong()");
+                        continue;
+                    },
                     Message::Text(_) => break,
                 }
             }
@@ -209,21 +216,20 @@ pub async fn pump_ws2udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: 
         }
     });
 
-    let mut buff = vec![0u8; 5 * 1024];
-    while let Ok(result) = timeout(span, udp_reader.recv_from(&mut buff)).await {
-        if let Ok((len, s)) = result {
-            // debug!("Recv udp from {}: len {}", s, len);
-            if len > 0 {
-                let addr = socket_addr_to_vec(s);
-                let mut b = vec![0x0u8, 0, 0];
-                b.extend(&addr);
-                b.extend(&buff[..len]);
-                let msg = Message::binary(b);
-                if let Ok(Ok(_)) = timeout(span, ws_sender.send(msg)).await {
-                    continue;
-                }
+    let mut buff = vec![0u8; BUFF_LEN];
+    while let Ok(Ok((len, s))) = timeout(span, udp_reader.recv_from(&mut buff)).await {
+        // debug!("Recv udp from {}: len {}", s, len);
+        if len > 0 {
+            let addr = socket_addr_to_vec(s);
+            let mut b = vec![0x0u8, 0, 0];
+            b.extend(&addr);
+            b.extend(&buff[..len]);
+            let msg = Message::binary(b);
+            if let Ok(Ok(_)) = timeout(span, ws_sender.send(msg)).await {
+                continue;
             }
         }
+        
         break;
     }
     let _ = ws_sender.close().await;
@@ -231,7 +237,7 @@ pub async fn pump_ws2udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: 
     debug!("local ws <= x => outlet udp");
 }
 
-async fn copy_udp2ws(
+async fn copy_udp_ws(
     msg: Message,
     udp_sender: std::sync::Arc<UdpSocket>,
     udp_reader: std::sync::Arc<UdpSocket>,
@@ -248,8 +254,11 @@ async fn copy_udp2ws(
     let handle = task::spawn(async move {
         let sender = udp_sender;
         while let Ok(result) = timeout(span, ws_receiver.next()).await {
-            if sig.load(std::sync::atomic::Ordering::Relaxed) {
-                break;
+            {
+                let s = sig.load(std::sync::atomic::Ordering::Relaxed);
+                if s {
+                    break;
+                }
             }
             if let Some(Ok(msg)) = result {
                 match msg {
@@ -259,8 +268,14 @@ async fn copy_udp2ws(
                             continue;
                         }
                     },
-                    Message::Ping(_) => continue,
-                    Message::Pong(_) => continue,
+                    Message::Ping(_) => {
+                        debug!("copy_udp_ws: Ping()");
+                        continue;
+                    },
+                    Message::Pong(_) => {
+                        debug!("copy_udp_ws: Pong()");
+                        continue;
+                    },
                     Message::Text(_) => break,
                     Message::Close(_) => break,
                 }
@@ -270,10 +285,13 @@ async fn copy_udp2ws(
         Ok::<(), Error>(())
     });
 
-    let mut buff = vec![0u8; 4 * 1024];
+    let mut buff = vec![0u8; BUFF_LEN];
     while let Ok(result) = timeout(span, udp_reader.recv_from(&mut buff)).await {
-        if sig_close.load(std::sync::atomic::Ordering::Relaxed) {
-            break;
+        {
+            let s = sig_close.load(std::sync::atomic::Ordering::Relaxed);
+            if s {
+                break;
+            }
         }
         if let Ok((len, _)) = result {
             if len > 0 {
@@ -299,13 +317,13 @@ pub async fn pump_udp_ws(
     let udp_sender = std::sync::Arc::new(udp_socket);
     let udp_reader = udp_sender.clone();
     let span = crate::comm::cons::UDP_TIMEOUT;
-    let mut buff = vec![0u8; 4 * 1024];
+    let mut buff = vec![0u8; BUFF_LEN];
 
     // get client local addr from first udp message
     if let Ok(Ok((len, src))) = timeout(span, udp_reader.recv_from(&mut buff)).await {
         if len > 0 {
             let msg = Message::binary(&buff[..len]);
-            let _ = copy_udp2ws(msg, udp_sender, udp_reader, ws_stream, src, span, sig_close).await;
+            let _ = copy_udp_ws(msg, udp_sender, udp_reader, ws_stream, src, span, sig_close).await;
         }
     }
 }
@@ -320,20 +338,18 @@ pub async fn pump_tcp_ws(
     let span = crate::comm::cons::CONN_TIMEOUT;
 
     let handle = task::spawn(async move {
-        while let Ok(result) = timeout(span, ws_receiver.next()).await {
-            if let Some(Ok(msg)) = result {
-                let r = send_msg_to_tcp_write_half(msg, &mut tcp_writer);
-                if let Ok(Ok(_)) = timeout(span, r).await
-                {
-                    continue;
-                }
+        while let Ok(Some(Ok(msg))) = timeout(span, ws_receiver.next()).await {
+            let r = send_msg_to_tcp_write_half(msg, &mut tcp_writer);
+            if let Ok(Ok(_)) = timeout(span, r).await
+            {
+                continue;
             }
             break;
         }
         let _ = tcp_writer.close().await;
     });
 
-    let mut buff = vec![0u8; 48 * 1024];
+    let mut buff = vec![0u8; BUFF_LEN];
     while let Ok(result) = timeout(span, tcp_reader.read(&mut buff)).await {
         if let Ok(len) = result {
             if len > 0 {

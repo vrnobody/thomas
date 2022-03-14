@@ -98,7 +98,7 @@ async fn relay_ws_udp(local: WebSocketStream<ConnectStream>) {
     if let Ok(raw_socket) = UdpSocket::bind("0.0.0.0:0").await {
         if let Ok(addr) = raw_socket.local_addr() {
             info!("Create outbound socket: {}", addr);
-            infrs::pump_ws2udp(local, raw_socket).await;
+            infrs::pump_ws_udp(local, raw_socket).await;
         }
     } else {
         info!("Create outbound udp socket fail!");
