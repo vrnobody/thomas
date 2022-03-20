@@ -45,23 +45,30 @@ async fn send_msg_to_ws_sink(
     let finished = Err(Error::ConnectionClosed);
 
     match msg {
-        Message::Close(_) => finished,
+        Message::Close(cm) => {
+            let _ = dest.send(Message::Close(cm)).await;
+            finished
+        },
         Message::Binary(buff) => {
-            if buff.len() > 0 {
-                dest.send(Message::Binary(buff)).await
-            } else {
+            let l = buff.len();
+            let r = dest.send(Message::Binary(buff)).await;
+            if l < 1 {
                 finished
+            }else{
+                r
             }
         },
         Message::Text(txt) => {
-            if txt.len() > 0 {
-                dest.send(Message::Text(txt)).await
-            } else {
+            let l = txt.len();
+            let r = dest.send(Message::Text(txt)).await;
+            if l < 1 {
                 finished
+            }else{
+                r
             }
         },
         Message::Ping(_) =>{ 
-            debug!("send_msg_to_ws_sink: Ping()");
+            info!("send_msg_to_ws_sink: Ping()");
             Ok(())
         },
         _ => finished,
@@ -79,18 +86,19 @@ async fn send_msg_to_tcp_write_half(
 
     match msg {
         Message::Binary(buff) => {
+            let r = dest.write_all(&buff).await;
             if buff.len() < 1 {
-                finished
-            } else {
-                // debug!("recv: {:?}", &buff);
-                dest.write_all(&buff).await
+                finished    
+            }else{
+                r
             }
         },
         Message::Text(txt) => {
+            let r = dest.write_all(txt.as_bytes()).await;
             if txt.len() < 1 {
                 finished
-            } else {
-                dest.write_all(txt.as_bytes()).await
+            }else{
+                r
             }
         },
         _ => finished,
