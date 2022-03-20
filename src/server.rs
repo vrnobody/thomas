@@ -1,8 +1,13 @@
-mod comm;
-mod comp;
+extern crate openssl_probe;
 use log::*;
 
+mod comm;
+mod comp;
+
 fn main() {
+
+    openssl_probe::init_ssl_cert_env_vars();
+
     let cfg = parse_args_for_server();
     comm::logging::init(&cfg.loglevel);
     comm::utils::register_ctrl_c_handler();

@@ -5,7 +5,7 @@ on:
 
 env:
   projName: Thomas
-  verStr: '1.0.2'
+  verStr: '1.0.4'
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          ARCHS=('aarch64.musl' 'arm.musleabi' 'armv7.musleabi' 'i686.musl' 'x86_64.musl')
+          ARCHS=('mips-musl' 'mipsel-musl' 'aarch64.musl' 'arm.musleabi' 'armv7.musleabi' 'i686.musl' 'x86_64.musl')
           for arch in "${ARCHS[@]}"
           do
             left="${arch%.*}"
@@ -51,6 +51,26 @@ jobs:
             arch="${left}-unknown-linux-${right}"
             zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
           done
+
+      - name: Upload mips
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-mips.zip
+          asset_name: $thomas-linux-mips.zip
+          asset_content_type: application/zip
+
+      - name: Upload mipsel
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }} 
+          asset_path: ./thomas-linux-mipsel.zip
+          asset_name: $thomas-linux-mipsel.zip
+          asset_content_type: application/zip
 
       - name: Upload aarch64
         uses: actions/upload-release-asset@v1.0.1
