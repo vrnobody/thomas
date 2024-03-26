@@ -12,9 +12,8 @@ pub fn register_ctrl_c_handler() {
 }
 
 pub fn parse_cmd_args(is_server: bool) -> String {
-
-    use std::io::Read;
     use clap::AppSettings;
+    use std::io::Read;
 
     let name = crate::comm::cons::PKG_NAME;
     let ty = if is_server { "server" } else { "client" };

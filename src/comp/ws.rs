@@ -28,7 +28,7 @@ async fn listen_tcp(
     local: WebSocketStream<ConnectStream>,
     listener: TcpListener,
     addr: std::net::SocketAddr,
-){
+) {
     let mut ws_writer = local;
     let mut r = vec![0x05, 0x00, 0x00];
     let tail = infrs::socket_addr_to_vec(addr);
@@ -105,10 +105,7 @@ async fn relay_ws_udp(local: WebSocketStream<ConnectStream>) {
     }
 }
 
-async fn relay(
-    local: WebSocketStream<ConnectStream>, 
-    header: models::HeaderFrame,
-) {
+async fn relay(local: WebSocketStream<ConnectStream>, header: models::HeaderFrame) {
     let duration = crate::comm::cons::CONN_TIMEOUT;
     match header.cmd {
         models::Cmds::Bind => {

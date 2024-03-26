@@ -1,7 +1,9 @@
 {
     "loglevel": "info",
     "listen": "127.0.0.1:1080",
-    "length": 4,
+    "length": 3,
+    "proxy": "socks://127.0.0.1:1080",
+    "inlets": [],
     "outlets": [
         {
             "name": "Out1",

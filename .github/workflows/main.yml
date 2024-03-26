@@ -11,7 +11,7 @@ env:
 jobs:
   create_release:
     name: Create release
-    runs-on: windows-latest
+    runs-on: windows-2019
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
@@ -124,7 +124,7 @@ jobs:
 
   build_windows:
     name: build windows binaries
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: create_release
 
     steps:        

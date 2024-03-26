@@ -1,0 +1,1 @@
+.\target\debug\server.exe -c=tmp\server.json

@@ -17,8 +17,8 @@ use bytes::Buf;
 use futures::{join, AsyncReadExt, AsyncWriteExt, SinkExt, StreamExt};
 use log::*;
 use std::sync::{
-    Arc, 
-    atomic::{AtomicBool, Ordering}
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 async fn do_socks5_handshake(local: &mut TcpStream) -> std::io::Result<(models::Cmds, String)> {
@@ -135,15 +135,48 @@ async fn dial(
     target: &str,
 ) -> Result<WebSocketStream<ConnectStream>> {
     let (mut chain, first) = make_chain(&cfg, cmd, target.to_string());
+    debug!("chain: {} first: {}", chain.len(), first);    
     if let Ok((mut ws_stream, _)) = connect_async(first.as_str()).await {
         while let Some(next) = chain.pop() {
+            debug!("send chain objects: {}", next);
             let msg = Message::text(next);
             ws_stream.send(msg).await?;
         }
         Ok(ws_stream)
     } else {
+        debug!("dial failed!");
         Err(async_tungstenite::tungstenite::Error::ConnectionClosed)
     }
+}
+
+fn append<'a>(
+    tail: &models::HeaderFrame,
+    nodes: &mut Vec<String>,
+    names: &mut Vec<String>,
+    prev: Option<&'a models::ServerInfo>,
+    servs: &'a Vec<models::ServerInfo>,
+    len: usize,
+) -> Option<&'a models::ServerInfo> {
+    use rand::seq::SliceRandom;
+    let mut r = prev;
+    for _ in 0..len {
+        let cur = servs.choose(&mut rand::thread_rng());
+        if let Some(node) = cur {
+            let frame;
+            if let Some(p) = r {
+                frame = utils::create_node_from(p).encrypt(&node.key);
+            } else {
+                names.insert(0, tail.param.clone());
+                frame = tail.encrypt(&node.key);
+            }
+            if let Some(c) = frame {
+                names.insert(0, node.name.to_string());
+                nodes.push(c);
+            }
+            r = cur.clone();
+        }
+    }
+    return r.clone();
 }
 
 fn make_chain(
@@ -157,25 +190,16 @@ fn make_chain(
         param: target,
     };
 
-    use rand::seq::SliceRandom;
     let mut r = vec![];
-    let mut prev = cfg.outlets.choose(&mut rand::thread_rng()).unwrap();
-    if let Some(c) = tail.encrypt(&prev.key) {
-        r.push(c);
-    }
-
-    let mut s = format!("[{}] -> {}", prev.name, tail.param);
-    for _ in 1..cfg.length {
-        let cur = cfg.relays.choose(&mut rand::thread_rng()).unwrap();
-        let p = utils::create_node_from(prev);
-        s.insert_str(0, format!("[{}]-", cur.name.to_string()).as_str());
-        if let Some(c) = p.encrypt(&cur.key) {
-            r.push(c);
-        }
-        prev = cur;
-    }
-    info!("Create chain {}", s);
-    (r, prev.addr.clone())
+    let mut names = vec![];
+    
+    let prev = append(&tail, &mut r, &mut names, None, &cfg.outlets, 1);
+    let prev = append(&tail, &mut r, &mut names, prev, &cfg.relays, cfg.length);
+    let prev = append(&tail, &mut r, &mut names, prev, &cfg.inlets, 1);
+    
+    let first = prev.unwrap();
+    info!("Create chain: [{}] first: {}", names.join(", "), first.name);
+    (r, first.addr.clone())
 }
 
 async fn handle_bind(cfgs: &models::ClientConfigs, dest: String, local: TcpStream) {
@@ -241,17 +265,12 @@ async fn handle_udp_assoc(cfgs: &models::ClientConfigs, expt: String, local: Tcp
     let _ = writer.close().await;
 }
 
-async fn handle_client(
-    cfg: Arc<models::ClientConfigs>,
-    tcp_stream: TcpStream,
-){
+async fn handle_client(cfg: Arc<models::ClientConfigs>, tcp_stream: TcpStream) {
     let mut local = tcp_stream;
     if let Ok((s5cmd, dest)) = do_socks5_handshake(&mut local).await {
         match s5cmd {
             models::Cmds::Connect => handle_connect(&*cfg, dest, local).await,
-            models::Cmds::UdpAssoc => {
-                handle_udp_assoc(&*cfg, dest, local).await
-            }
+            models::Cmds::UdpAssoc => handle_udp_assoc(&*cfg, dest, local).await,
             models::Cmds::Bind => handle_bind(&*cfg, dest, local).await,
             _ => {}
         }
@@ -267,10 +286,44 @@ pub fn serv(cfgs: models::ClientConfigs) {
         log::info!("listening on {}", listener.local_addr().unwrap());
 
         while let Some(client) = listener.incoming().next().await {
-            if let Ok(local) = client{
+            if let Ok(local) = client {
                 let cfg = arc.clone();
                 task::spawn(handle_client(cfg, local));
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_node_test() {
+        let target = "bing.com:443";
+        let tail = models::HeaderFrame {
+            cmd: models::Cmds::Connect,
+            desc: "".to_string(),
+            param: target.to_string(),
+        };
+
+        let servs = vec![models::ServerInfo {
+            name: "hello".to_string(),
+            addr: "ws://127.0.0.1:1234".to_string(),
+            key: "123456".to_string(),
+        }];
+
+        let len = 4;
+
+        let mut r = vec![];
+        let mut names = vec![];
+
+        let prev = append(&tail, &mut r, &mut names, None, &servs, len);
+
+        println!("chain: [{}]", names.join(", "));
+        assert_eq!(names.len(), len + 1);
+        assert!(!prev.is_none());
+        assert_eq!(prev.unwrap().key, servs[0].key);
+
+    }
 }

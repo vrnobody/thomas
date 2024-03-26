@@ -1,1 +1,1 @@
-cargo run --bin server -- -c=server.json
+cargo run --bin server -- -c=tmp/server.json

@@ -15,7 +15,7 @@ client -c client.json
 ```
 
 #### 配置文件
-根目录有client.json, server.json两个配置样例。其中client.json的`listen`填写本地SOCKS5监听地址。`length`设置代理链长度（即跳转次数）。`outlets`设置出口服务器。`relays`设置中继服务器。客户端创建代理链时会从`outlets`中随机抽取1个节点作为最终出口，然后随机抽取 length - 1 个`relays`节点作为中继。代理数据依次经过各节点最后到达目标网站。当`length`设置为1时，客户端将只从`outlets`中抽取1个节点，不抽取中继节点。  
+根目录有client.json, server.json两个配置样例。其中client.json的`listen`填写本地SOCKS5监听地址。`length`设置中继服务器数量。`inlets`设置出口服务器。`relays`设置中继服务器。`outlets`设置出口服务器。客户端创建代理链时分别从`inlets`/`outlets`中随机抽取1个节点作为最终出口，然后随机抽取 length 个`relays`节点作为中继。代理数据依次经过各节点最后到达目标网站。  
 
 #### 注意事项
 服务端如果放公网需要前置Nginx/Caddy做TLS终结，相应client.json的`addr`配置项由`ws://...`改为`wss://...`。这个软件没对数据流做任何加密，所以不要作死直接放公网。  

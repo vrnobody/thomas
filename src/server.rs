@@ -5,7 +5,6 @@ mod comm;
 mod comp;
 
 fn main() {
-
     openssl_probe::init_ssl_cert_env_vars();
 
     let cfg = parse_args_for_server();
@@ -14,7 +13,7 @@ fn main() {
 
     let ver = crate::comm::cons::VERSION;
     let name = crate::comm::cons::PKG_NAME;
-    
+
     println!("{} server v{} starts", name, ver);
     comp::ws::serv(cfg);
     info!("{} exits", name);
@@ -28,6 +27,6 @@ fn parse_args_for_server() -> comm::models::ServerConfigs {
             println!("parse config fail");
             println!("{:?}", e);
             std::process::exit(1);
-        },
+        }
     }
 }

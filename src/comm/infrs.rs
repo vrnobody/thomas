@@ -1,3 +1,4 @@
+use crate::comm::cons::BUFF_LEN;
 use async_std::{
     future::timeout,
     io,
@@ -14,7 +15,6 @@ use async_tungstenite::{
 use futures::{join, AsyncReadExt, AsyncWriteExt, SinkExt, StreamExt};
 use log::*;
 use std::time::Duration;
-use crate::comm::cons::BUFF_LEN;
 
 // start from ATYPE, then ADDRESS and PORT
 pub fn socket_addr_to_vec(socket_addr: std::net::SocketAddr) -> Vec<u8> {
@@ -48,29 +48,29 @@ async fn send_msg_to_ws_sink(
         Message::Close(cm) => {
             let _ = dest.send(Message::Close(cm)).await;
             finished
-        },
+        }
         Message::Binary(buff) => {
             let l = buff.len();
             let r = dest.send(Message::Binary(buff)).await;
             if l < 1 {
                 finished
-            }else{
+            } else {
                 r
             }
-        },
+        }
         Message::Text(txt) => {
             let l = txt.len();
             let r = dest.send(Message::Text(txt)).await;
             if l < 1 {
                 finished
-            }else{
+            } else {
                 r
             }
-        },
-        Message::Ping(_) =>{ 
+        }
+        Message::Ping(_) => {
             info!("send_msg_to_ws_sink: Ping()");
             Ok(())
-        },
+        }
         _ => finished,
     }
 }
@@ -88,19 +88,19 @@ async fn send_msg_to_tcp_write_half(
         Message::Binary(buff) => {
             let r = dest.write_all(&buff).await;
             if buff.len() < 1 {
-                finished    
-            }else{
+                finished
+            } else {
                 r
             }
-        },
+        }
         Message::Text(txt) => {
             let r = dest.write_all(txt.as_bytes()).await;
             if txt.len() < 1 {
                 finished
-            }else{
+            } else {
                 r
             }
-        },
+        }
         _ => finished,
     }
 }
@@ -114,7 +114,7 @@ async fn copy_ws_ws(
     while let Ok(Some(Ok(msg))) = timeout(span, source.next()).await {
         if let Ok(Ok(_)) = timeout(span, send_msg_to_ws_sink(msg, dest)).await {
             continue;
-        }    
+        }
         break;
     }
 }
@@ -157,7 +157,7 @@ pub async fn send_udp_pkg(sender: &UdpSocket, buf: &Vec<u8>) {
                 let socket = SocketAddrV4::new(v4addr, port);
                 dest = Some(socket.into());
                 idx = 10;
-            },
+            }
             0x03 => {
                 let len = buf[4] as usize;
                 let port: u16 = buf[5 + len..5 + 2 + len].as_ref().get_u16();
@@ -169,7 +169,7 @@ pub async fn send_udp_pkg(sender: &UdpSocket, buf: &Vec<u8>) {
                         idx = 5 + 2 + len;
                     }
                 }
-            },
+            }
             0x04 => {
                 let mut tmp_array: [u8; 16] = Default::default();
                 tmp_array.copy_from_slice(&buf[4..20]);
@@ -178,8 +178,8 @@ pub async fn send_udp_pkg(sender: &UdpSocket, buf: &Vec<u8>) {
                 let socket = SocketAddrV6::new(v6addr, port, 0, 0);
                 dest = Some(socket.into());
                 idx = 22;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -208,15 +208,15 @@ pub async fn pump_ws_udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: 
                             send_udp_pkg(&*sender, &buff).await;
                             continue;
                         }
-                    },
+                    }
                     Message::Ping(_) => {
                         debug!("pump_ws_udp: Ping()");
                         continue;
-                    },
+                    }
                     Message::Pong(_) => {
                         debug!("pump_ws_udp: Pong()");
                         continue;
-                    },
+                    }
                     Message::Text(_) => break,
                 }
             }
@@ -237,7 +237,7 @@ pub async fn pump_ws_udp(ws_stream: WebSocketStream<ConnectStream>, udp_socket: 
                 continue;
             }
         }
-        
+
         break;
     }
     let _ = ws_sender.close().await;
@@ -275,15 +275,15 @@ async fn copy_udp_ws(
                             let _ = sender.send_to(&buff, src).await;
                             continue;
                         }
-                    },
+                    }
                     Message::Ping(_) => {
                         debug!("copy_udp_ws: Ping()");
                         continue;
-                    },
+                    }
                     Message::Pong(_) => {
                         debug!("copy_udp_ws: Pong()");
                         continue;
-                    },
+                    }
                     Message::Text(_) => break,
                     Message::Close(_) => break,
                 }
@@ -336,10 +336,7 @@ pub async fn pump_udp_ws(
     }
 }
 
-pub async fn pump_tcp_ws(
-    tcp_stream: TcpStream, 
-    ws_stream: WebSocketStream<ConnectStream>
-) {
+pub async fn pump_tcp_ws(tcp_stream: TcpStream, ws_stream: WebSocketStream<ConnectStream>) {
     debug!("pump ws <-> tcp");
     let (mut tcp_reader, mut tcp_writer) = tcp_stream.split();
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
@@ -348,8 +345,7 @@ pub async fn pump_tcp_ws(
     let handle = task::spawn(async move {
         while let Ok(Some(Ok(msg))) = timeout(span, ws_receiver.next()).await {
             let r = send_msg_to_tcp_write_half(msg, &mut tcp_writer);
-            if let Ok(Ok(_)) = timeout(span, r).await
-            {
+            if let Ok(Ok(_)) = timeout(span, r).await {
                 continue;
             }
             break;

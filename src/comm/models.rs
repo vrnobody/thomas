@@ -97,7 +97,9 @@ pub struct ClientConfigs {
     #[serde(default)]
     pub loglevel: String,
     pub listen: String,
-    pub length: u16,
+    pub length: usize,
+    pub proxy: String,
+    pub inlets: Vec<ServerInfo>,
     pub outlets: Vec<ServerInfo>,
     pub relays: Vec<ServerInfo>,
 }
@@ -108,6 +110,8 @@ impl Default for ClientConfigs {
             loglevel: "info".to_string(),
             listen: "127.0.0.1:1080".to_string(),
             length: 1,
+            proxy: "".to_string(),
+            inlets: vec![],
             outlets: vec![],
             relays: vec![],
         }
