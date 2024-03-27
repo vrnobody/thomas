@@ -1,10 +1,9 @@
-name: main
+name: build
 
-on:
-  workflow_dispatch:
+on: 
   push:
-    tags:
-      - '**'
+    branches:
+      - main
 
 env:
   projName: Thomas
@@ -12,26 +11,9 @@ env:
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:
-  create_release:
-    name: Create release
-    runs-on: windows-2019
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
-          name: 'v${{ env.verStr }}'
-          draft: true
-          prerelease: false
-
   build_ubuntu:
-    name: build bins for unix
+    name: build ubuntu binaries
     runs-on: ubuntu-latest
-    needs: create_release
 
     steps:
       - name: Checkout master
@@ -54,24 +36,9 @@ jobs:
             zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
           done
 
-      - name: Upload unix bins
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
-          files: |
-            thomas-linux-mips.zip
-            thomas-linux-mipsel.zip
-            thomas-linux-aarch64.zip
-            thomas-linux-arm.zip
-            thomas-linux-armv7.zip
-            thomas-linux-i686.zip
-            thomas-linux-x86_64.zip
-
   build_windows:
     name: build windows binaries
     runs-on: windows-2019
-    needs: create_release
 
     steps:        
       - name: Checkout master
@@ -83,11 +50,3 @@ jobs:
       - name: Create assets
         shell: pwsh
         run: Compress-Archive -Path target/release/*.exe thomas-win-x86_64.zip
-
-      - name: Upload unix bins
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
-          files: |
-            thomas-win-x86_64.zip
