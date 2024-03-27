@@ -1,1 +1,1 @@
-cargo run --bin client -- -c=tmp/client.json
+cargo run --bin client -- -c=client.json

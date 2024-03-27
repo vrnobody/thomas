@@ -1,9 +1,15 @@
 {
     "loglevel": "info",
     "listen": "127.0.0.1:1080",
-    "length": 3,
-    "proxy": "socks://127.0.0.1:1080",
-    "inlets": [],
+    "length": 2,
+    "proxy": "http://127.0.0.1:8080",
+    "inlets": [
+        {
+            "name": "In1",
+            "addr": "ws://127.0.0.1:3001",
+            "key": "123456"
+        }
+    ],
     "outlets": [
         {
             "name": "Out1",
@@ -13,32 +19,32 @@
     ],
     "relays": [
         {
-            "name": "S1",
+            "name": "Serv1",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         },
         {
-            "name": "S2",
+            "name": "Serv2",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         },
         {
-            "name": "S3",
+            "name": "Serv3",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         },
         {
-            "name": "S4",
+            "name": "Serv4",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         },
         {
-            "name": "S5",
+            "name": "Serv5",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         },
         {
-            "name": "S6",
+            "name": "Serv6",
             "addr": "ws://127.0.0.1:3001",
             "key": "123456"
         }

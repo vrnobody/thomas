@@ -8,7 +8,8 @@ use async_std::{
 };
 
 use async_tungstenite::{
-    async_std::{connect_async, ConnectStream},
+    async_std::{client_async_tls, connect_async, ConnectStream},
+    // client_async,
     tungstenite::{Message, Result},
     WebSocketStream,
 };
@@ -134,19 +135,40 @@ async fn dial(
     cmd: models::Cmds,
     target: &str,
 ) -> Result<WebSocketStream<ConnectStream>> {
-    let (mut chain, first) = make_chain(&cfg, cmd, target.to_string());
-    debug!("chain: {} first: {}", chain.len(), first);    
-    if let Ok((mut ws_stream, _)) = connect_async(first.as_str()).await {
-        while let Some(next) = chain.pop() {
-            debug!("send chain objects: {}", next);
-            let msg = Message::text(next);
-            ws_stream.send(msg).await?;
+    match dial_core(&cfg, cmd, &target).await {
+        Ok(s) => Ok(s),
+        Err(e) => {
+            info!("failed to connect: {} {}", target, e);
+            Err(e)
         }
-        Ok(ws_stream)
-    } else {
-        debug!("dial failed!");
-        Err(async_tungstenite::tungstenite::Error::ConnectionClosed)
     }
+}
+
+async fn dial_core(
+    cfg: &models::ClientConfigs,
+    cmd: models::Cmds,
+    target: &str,
+) -> Result<WebSocketStream<ConnectStream>> {
+    let (mut chain, first) = make_chain(&cfg, cmd, target.to_string());
+    let conn;
+    if cfg.proxy.is_empty() {
+        conn = connect_async(first).await;
+    } else {
+        // info!("host: {}", &first);
+        let s5tcp = crate::comp::proxy::InnerProxy::from_proxy_str(&cfg.proxy)
+            .unwrap()
+            .connect_async(&first)
+            .await
+            .unwrap()
+            .into_inner();
+        conn = client_async_tls(&first, s5tcp).await;
+    }
+    let (mut ws_stream, _) = conn.unwrap();
+    while let Some(next) = chain.pop() {
+        let msg = Message::text(next);
+        ws_stream.send(msg).await?;
+    }
+    Ok(ws_stream)
 }
 
 fn append<'a>(
@@ -192,13 +214,16 @@ fn make_chain(
 
     let mut r = vec![];
     let mut names = vec![];
-    
+
     let prev = append(&tail, &mut r, &mut names, None, &cfg.outlets, 1);
     let prev = append(&tail, &mut r, &mut names, prev, &cfg.relays, cfg.length);
     let prev = append(&tail, &mut r, &mut names, prev, &cfg.inlets, 1);
-    
+
     let first = prev.unwrap();
-    info!("Create chain: [{}] first: {}", names.join(", "), first.name);
+    if !cfg.proxy.is_empty() {
+        names.insert(0, "proxy".to_string());
+    }
+    info!("chain: [{}]", names.join(", "));
     (r, first.addr.clone())
 }
 
@@ -216,7 +241,6 @@ async fn handle_connect(cfgs: &models::ClientConfigs, dest: String, local: TcpSt
     let mut writer = local.clone();
     match dial(&cfgs, models::Cmds::Connect, &dest).await {
         Ok(remote) => {
-            log::info!("connect to {} ok", dest);
             reply(&mut writer, 0x00).await;
             let _ = infrs::pump_tcp_ws(local, remote).await;
         }
@@ -324,6 +348,5 @@ mod tests {
         assert_eq!(names.len(), len + 1);
         assert!(!prev.is_none());
         assert_eq!(prev.unwrap().key, servs[0].key);
-
     }
 }

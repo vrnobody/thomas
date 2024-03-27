@@ -5,7 +5,7 @@ on:
 
 env:
   projName: Thomas
-  verStr: '1.0.4'
+  verStr: '1.1.0'
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:

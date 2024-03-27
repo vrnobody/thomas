@@ -113,11 +113,11 @@ async fn relay(local: WebSocketStream<ConnectStream>, header: models::HeaderFram
             handle_bind_cmd(local, header, duration).await;
         }
         models::Cmds::Relay => {
-            info!("relay to {}", header.desc);
+            info!("relay to [{}] {}", header.desc, header.param);
             relay_ws_ws(local, header, duration).await;
         }
         models::Cmds::Connect => {
-            info!("connect {}", header.param);
+            info!("connect to {}", header.param);
             relay_ws_tcp(local, header, duration).await;
         }
         models::Cmds::UdpAssoc => {
