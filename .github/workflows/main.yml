@@ -1,7 +1,11 @@
 name: main
 
 on: 
-  create
+  push:
+    branches:
+      - main
+    tags:    
+      - '**'
 
 env:
   projName: Thomas
