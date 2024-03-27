@@ -59,6 +59,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.verStr }}
+          draft: true
+          prerelease: false
           files: |
             thomas-linux-mips.zip
             thomas-linux-mipsel.zip
@@ -89,5 +91,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.verStr }}
+          draft: true
+          prerelease: false
           files: |
             thomas-win-x86_64.zip
