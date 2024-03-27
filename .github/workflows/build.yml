@@ -22,7 +22,7 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          ARCHS=('mips.musl' 'mipsel.musl' 'aarch64.musl' 'arm.musleabi' 'armv7.musleabi' 'i686.musl' 'x86_64.musl')
+          ARCHS=('aarch64.musl' 'x86_64.musl')
           for arch in "${ARCHS[@]}"
           do
             left="${arch%.*}"
