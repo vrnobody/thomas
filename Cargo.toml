@@ -1,6 +1,6 @@
 [package]
 name = "Thomas"
-version = "1.1.0"
+version = "1.1.1"
 authors = ["nobody <null@undefined.nil>"]
 edition = "2018"
 

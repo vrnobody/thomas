@@ -8,7 +8,7 @@ on:
 
 env:
   projName: Thomas
-  verStr: '1.1.0'
+  verStr: '1.1.1'
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
       - name: Upload unix bins
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.verStr }}
           files: |
             thomas-linux-mips.zip
@@ -87,7 +87,7 @@ jobs:
       - name: Upload unix bins
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.verStr }}
           files: |
             thomas-win-x86_64.zip
