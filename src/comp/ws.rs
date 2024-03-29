@@ -37,7 +37,6 @@ async fn listen_tcp(
     let _ = ws_writer.send(Message::Binary(r)).await;
     debug!("send done");
     if let Ok((tcp_stream, addr)) = listener.accept().await {
-        // handle connection
         debug!("recv conn from: {}", addr);
         r = vec![0x05, 0x00, 0x00];
         r.extend(infrs::socket_addr_to_vec(addr));
@@ -155,28 +154,22 @@ async fn accept_connection(
 }
 
 pub fn serv(cfgs: models::ServerConfigs) {
-    task::block_on(run(cfgs)).unwrap();
-}
-
-async fn run(cfgs: models::ServerConfigs) -> std::io::Result<()> {
     let addr = cfgs.listen.to_string();
     let key = cfgs.key.to_string();
 
-    let try_socket = TcpListener::bind(&addr).await;
-    let err = format!("bind to {} failed", addr);
-    let listener = try_socket.expect(err.as_str());
-    info!("listening on: {}", addr);
+    task::block_on(async {
+        let socket = TcpListener::bind(&addr).await.unwrap();
+        info!("listening on: {}", addr);
 
-    while let Ok((stream, _)) = listener.accept().await {
-        let k = key.to_string();
-        let span = crate::comm::cons::CONN_TIMEOUT;
-        task::spawn(async move {
-            let conn = accept_connection(k, stream);
-            if let Ok(Ok((ws_stream, header))) = timeout(span, conn).await {
-                relay(ws_stream, header).await;
-            }
-        });
-    }
-
-    Ok(())
+        while let Ok((stream, _)) = socket.accept().await {
+            let k = key.to_string();
+            let span = crate::comm::cons::CONN_TIMEOUT;
+            task::spawn(async move {
+                let conn = accept_connection(k, stream);
+                if let Ok(Ok((ws_stream, header))) = timeout(span, conn).await {
+                    let _ = relay(ws_stream, header).await;
+                }
+            });
+        }
+    });
 }

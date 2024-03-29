@@ -1,7 +1,26 @@
+use std::io::{Error, ErrorKind};
+
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use rand::Rng; // Or `Aes128Gcm`
 use serde::{Deserialize, Serialize};
+
+use url::Url;
+
+pub fn get_addr(link: &str) -> Result<String, Error> {
+    if let Ok(url) = Url::parse(link) {
+        if let Some(host) = url.host() {
+            if let Some(port) = url.port() {
+                return Ok(format!("{host}:{port}"));
+            }
+            match url.scheme() {
+                "https" | "wss" => return Ok(format!("{host}:443")),
+                "http" | "ws" | _ => return Ok(format!("{host}:80")),
+            }
+        }
+    }
+    return Err(Error::new(ErrorKind::InvalidInput, "parse addr failed"));
+}
 
 pub fn register_ctrl_c_handler() {
     ctrlc::set_handler(move || {
@@ -78,7 +97,7 @@ pub fn aes_enc(text: &String, key: &String) -> Option<EncText> {
 
     if let Ok(ciphertext) = cipher.encrypt(n, text.as_bytes()) {
         return Some(EncText {
-            nonce: nonce,
+            nonce,
             cipher: ciphertext,
             padding: rand_padding(),
         });
@@ -129,5 +148,24 @@ mod tests {
 
         println!("dec: {:?}", dec);
         assert_eq!(text, dec);
+    }
+
+    #[test]
+    fn get_addr_test() {
+        get_addr_wraper("https://bing.com/", "bing.com:443");
+        get_addr_wraper("https://bing.com:123/", "bing.com:123");
+        get_addr_wraper("http://bing.com", "bing.com:80");
+        get_addr_wraper("http://bing.com:123", "bing.com:123");
+
+        // panic get_addr_wraper("bing.com:123", "bing.com:123");
+        // panic: get_addr_wraper("bing.com/", "bing.com");
+        // panic: get_addr_wraper("bing.com", "bing.com");
+    }
+
+    fn get_addr_wraper(url: &str, exp: &str) {
+        print!("src: [{url}] exp: [{exp}] ");
+        let addr = get_addr(url).unwrap();
+        println!("addr: [{addr}]");
+        assert_eq!(addr, exp);
     }
 }

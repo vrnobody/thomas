@@ -15,7 +15,7 @@ fn main() {
     let name = crate::comm::cons::PKG_NAME;
 
     println!("{} client v{} starts", name, ver);
-    comp::socks5::serv(cfg);
+    comp::listener::serv(cfg);
     info!("{} exits", name);
 }
 

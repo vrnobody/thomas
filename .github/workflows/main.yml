@@ -8,13 +8,13 @@ on:
 
 env:
   projName: Thomas
-  verStr: '1.1.1'
+  verStr: '1.1.2'
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:
   create_release:
     name: Create release
-    runs-on: windows-2019
+    runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
@@ -29,10 +29,16 @@ jobs:
           prerelease: false
 
   build_ubuntu:
-    name: build bins for unix
-    runs-on: ubuntu-latest
+    name: build unix binaries
     needs: create_release
 
+    strategy:
+      matrix:
+        archs: [mips.musl, mipsel.musl, aarch64.musl, arm.musleabi, armv7.musleabi, i686.musl, x86_64.musl]
+
+    runs-on: ubuntu-latest
+    env:
+      ARCH: ${{ matrix.archs }}
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
@@ -40,19 +46,16 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          ARCHS=('mips.musl' 'mipsel.musl' 'aarch64.musl' 'arm.musleabi' 'armv7.musleabi' 'i686.musl' 'x86_64.musl')
-          for arch in "${ARCHS[@]}"
-          do
-            left="${arch%.*}"
-            right="${arch#*.}"
-            echo
-            echo "${arch}=${left}-${right}"
-            image="messense/rust-musl-cross:${left}-${right}"
-            docker pull ${image}
-            docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release
-            arch="${left}-unknown-linux-${right}"
-            zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
-          done
+          left="${ARCH%.*}"
+          right="${ARCH#*.}"
+          echo
+          echo "${ARCH}=${left}-${right}"
+          image="messense/rust-musl-cross:${left}-${right}"
+          docker pull ${image}
+          docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release --features "openssl"
+          tag="${left}-unknown-linux-${right}"
+          asset="thomas-linux-${left}.zip"
+          zip -q -j ${asset} target/${tag}/release/server target/${tag}/release/client
 
       - name: Upload unix bins
         uses: softprops/action-gh-release@v2
@@ -62,13 +65,7 @@ jobs:
           draft: true
           prerelease: false
           files: |
-            thomas-linux-mips.zip
-            thomas-linux-mipsel.zip
-            thomas-linux-aarch64.zip
-            thomas-linux-arm.zip
-            thomas-linux-armv7.zip
-            thomas-linux-i686.zip
-            thomas-linux-x86_64.zip
+            thomas-linux-*.zip
 
   build_windows:
     name: build windows binaries

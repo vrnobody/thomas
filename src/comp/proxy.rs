@@ -1,12 +1,9 @@
-use std::io::Error;
-use std::io::ErrorKind;
-// use std::pin::Pin;
-// use std::task::{Context, Poll};
 use async_std::net::TcpStream;
 use futures::{AsyncReadExt, AsyncWriteExt};
 use socks::Socks5Stream;
+use std::io::Error;
+use std::io::ErrorKind;
 use url::Url;
-// use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
 pub enum InnerProxy {
@@ -15,7 +12,7 @@ pub enum InnerProxy {
         auth: Option<Vec<u8>>,
         url: String,
     },
-    // socks5
+    // socks or socks5
     Socks {
         auth: Option<(String, String)>,
         url: String,

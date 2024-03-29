@@ -12,7 +12,7 @@ use async_tungstenite::{
     tungstenite::{Error, Message, Result},
     WebSocketStream,
 };
-use futures::{join, AsyncReadExt, AsyncWriteExt, SinkExt, StreamExt};
+use futures::{io::WriteHalf, join, AsyncReadExt, AsyncWriteExt, SinkExt, StreamExt};
 use log::*;
 use std::time::Duration;
 
@@ -77,7 +77,7 @@ async fn send_msg_to_ws_sink(
 
 async fn send_msg_to_tcp_write_half(
     msg: Message,
-    dest: &mut futures::io::WriteHalf<TcpStream>,
+    dest: &mut WriteHalf<async_std::net::TcpStream>,
 ) -> io::Result<()> {
     let finished = Err(std::io::Error::new(
         std::io::ErrorKind::WriteZero,
@@ -338,6 +338,7 @@ pub async fn pump_udp_ws(
 
 pub async fn pump_tcp_ws(tcp_stream: TcpStream, ws_stream: WebSocketStream<ConnectStream>) {
     debug!("pump ws <-> tcp");
+
     let (mut tcp_reader, mut tcp_writer) = tcp_stream.split();
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let span = crate::comm::cons::CONN_TIMEOUT;

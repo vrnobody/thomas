@@ -11,29 +11,30 @@ env:
 
 jobs:
   build_ubuntu:
-    name: build ubuntu binaries
-    runs-on: ubuntu-latest
+    name: build unix binaries
 
+    strategy:
+      matrix:
+        archs: [aarch64.musl, x86_64.musl]
+
+    runs-on: ubuntu-latest
+    env:
+      ARCH: ${{ matrix.archs }}
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
-
       - name: Docker build
         shell: bash
         run: |
-          ARCHS=('aarch64.musl' 'x86_64.musl')
-          for arch in "${ARCHS[@]}"
-          do
-            left="${arch%.*}"
-            right="${arch#*.}"
-            echo
-            echo "${arch}=${left}-${right}"
-            image="messense/rust-musl-cross:${left}-${right}"
-            docker pull ${image}
-            docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release
-            arch="${left}-unknown-linux-${right}"
-            zip -q -j thomas-linux-${left}.zip target/${arch}/release/server target/${arch}/release/client
-          done
+          left="${ARCH%.*}"
+          right="${ARCH#*.}"
+          echo
+          echo "${ARCH}=${left}-${right}"
+          image="messense/rust-musl-cross:${left}-${right}"
+          docker pull ${image}
+          docker run --rm -v "$(pwd)":/home/rust/src ${image} cargo build --release --features "openssl"
+          tag="${left}-unknown-linux-${right}"
+          zip -q -j thomas-linux-${left}.zip target/${tag}/release/server target/${tag}/release/client
 
   build_windows:
     name: build windows binaries
