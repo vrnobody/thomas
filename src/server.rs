@@ -5,23 +5,25 @@ mod comm;
 mod comp;
 
 fn main() {
-    openssl_probe::init_ssl_cert_env_vars();
+    let config = comm::utils::parse_cmd_args(true);
+    if config == None {
+        std::process::exit(0);
+    }
 
-    let cfg = parse_args_for_server();
+    let cfg = parse_args_for_server(&config.unwrap());
     comm::logging::init(&cfg.loglevel);
+    openssl_probe::init_ssl_cert_env_vars();
     comm::utils::register_ctrl_c_handler();
 
     let ver = crate::comm::cons::VERSION;
     let name = crate::comm::cons::PKG_NAME;
-
     println!("{} server v{} starts", name, ver);
     comp::ws::serv(cfg);
     info!("{} exits", name);
 }
 
-fn parse_args_for_server() -> comm::models::ServerConfigs {
-    let config = comm::utils::parse_cmd_args(true);
-    match serde_json::from_str(config.as_str()) {
+fn parse_args_for_server(config: &str) -> comm::models::ServerConfigs {
+    match serde_json::from_str(config) {
         Ok(c) => return c,
         Err(e) => {
             println!("parse config fail");

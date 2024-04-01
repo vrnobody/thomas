@@ -4,18 +4,25 @@ use crate::{
 };
 use async_tungstenite::{
     async_std::{client_async_tls, connect_async, ConnectStream},
-    tungstenite::{Message, Result},
+    tungstenite::{Error, Message, Result},
     WebSocketStream,
 };
 use futures::SinkExt;
 use log::*;
+use rand::prelude::SliceRandom;
+use x25519_dalek::PublicKey;
 
 pub async fn dial(
     cfg: &models::ClientConfigs,
     cmd: models::Cmds,
     target: &str,
 ) -> Result<WebSocketStream<ConnectStream>> {
-    match dial_core(&cfg, cmd, &target).await {
+    let tail = models::HeaderFrame {
+        cmd,
+        param: target.to_string(),
+        padding: utils::rand_padding(),
+    };
+    match dial_core(&cfg, tail).await {
         Ok(s) => Ok(s),
         Err(e) => {
             info!("failed to connect: {} {}", target, e);
@@ -26,85 +33,105 @@ pub async fn dial(
 
 async fn dial_core(
     cfg: &models::ClientConfigs,
-    cmd: models::Cmds,
-    target: &str,
+    tail: models::HeaderFrame,
 ) -> Result<WebSocketStream<ConnectStream>> {
-    let (mut chain, first) = make_chain(&cfg, cmd, target.to_string());
+    let make_chain_result = make_chain(&cfg, tail);
+    if make_chain_result.is_none() {
+        warn!("can not create proxy chain");
+        return Err(Error::ConnectionClosed);
+    }
+    let chain = make_chain_result.unwrap();
+    info!("chain: [{}]", chain.names.join(", "));
+
     let conn;
     if cfg.proxy.is_empty() {
-        conn = connect_async(first).await;
+        conn = connect_async(&chain.next).await;
     } else {
         // info!("host: {}", &first);
         let s5tcp = comp::proxy::InnerProxy::from_proxy_str(&cfg.proxy)
             .unwrap()
-            .connect_async(&first)
+            .connect_async(&chain.next)
             .await
             .unwrap()
             .into_inner();
-        conn = client_async_tls(&first, s5tcp).await;
+        conn = client_async_tls(&chain.next, s5tcp).await;
     }
     let (mut ws_stream, _) = conn?;
-    while let Some(next) = chain.pop() {
-        let msg = Message::text(next);
-        ws_stream.send(msg).await?;
+    for enc_header in chain.headers {
+        if let Some(text) = enc_header.to_string() {
+            let msg = Message::text(text);
+            ws_stream.send(msg).await?;
+            // todo: check server feedback
+        }
     }
     Ok(ws_stream)
 }
 
-fn append<'a>(
-    tail: &models::HeaderFrame,
-    nodes: &mut Vec<String>,
-    names: &mut Vec<String>,
-    prev: Option<&'a models::ServerInfo>,
-    servs: &'a Vec<models::ServerInfo>,
-    len: usize,
-) -> Option<&'a models::ServerInfo> {
-    use rand::seq::SliceRandom;
-    let mut r = prev;
-    for _ in 0..len {
-        let cur = servs.choose(&mut rand::thread_rng());
-        if let Some(node) = cur {
-            let frame;
-            if let Some(p) = r {
-                frame = utils::create_node_from(p).encrypt(&node.key);
-            } else {
-                names.insert(0, tail.param.clone());
-                frame = tail.encrypt(&node.key);
-            }
-            if let Some(c) = frame {
-                names.insert(0, node.name.to_string());
-                nodes.push(c);
-            }
-            r = cur.clone();
-        }
-    }
-    return r.clone();
-}
-
 fn make_chain(
     cfg: &models::ClientConfigs,
-    cmd: models::Cmds,
-    target: String,
-) -> (Vec<String>, String) {
-    let tail = models::HeaderFrame {
-        cmd,
-        desc: "".to_string(),
-        param: target,
-    };
+    tail: models::HeaderFrame,
+) -> Option<models::ProxyChain> {
+    let secret = utils::generate_secret();
+    let pubkey = PublicKey::from(&secret).to_bytes();
 
-    let mut r = vec![];
+    let mut nodes = vec![];
+    let mut rng = rand::thread_rng();
+    if let Some(node) = cfg.outlets.choose(&mut rng) {
+        nodes.push(node);
+    }
+    for _ in 0..cfg.length {
+        if let Some(node) = cfg.relays.choose(&mut rng) {
+            nodes.push(node);
+        }
+    }
+    if let Some(node) = cfg.inlets.choose(&mut rng) {
+        nodes.push(node);
+    }
+
+    if nodes.len() < 1 {
+        return None;
+    }
+
+    let mut headers = vec![];
+    let mut hashes = vec![];
     let mut names = vec![];
 
-    let prev = append(&tail, &mut r, &mut names, None, &cfg.outlets, 1);
-    let prev = append(&tail, &mut r, &mut names, prev, &cfg.relays, cfg.length);
-    let prev = append(&tail, &mut r, &mut names, prev, &cfg.inlets, 1);
+    let mut prev: Option<&models::ServerInfo> = None;
+    let mut frame = tail;
+    let mut name = frame.param.to_string();
+    for node in nodes {
+        if let Some(their_pubkey) = utils::b64_to_pubkey(&node.pubkey) {
+            if let Some(p) = prev {
+                name = p.name.to_string();
+                frame = p.to_header_frame();
+            }
+            prev = Some(node);
 
-    let first = prev.unwrap();
-    if !cfg.proxy.is_empty() {
-        names.insert(0, "proxy".to_string());
+            let bytes = secret.diffie_hellman(&their_pubkey).to_bytes();
+            let key = base64::encode(&bytes);
+            if let Some((enc_header, hash)) = frame.encrypt(&key, &pubkey) {
+                headers.insert(0, enc_header);
+                hashes.insert(0, hash);
+                names.insert(0, name.to_string());
+            } else {
+                return None;
+            }
+        }
     }
-    info!("chain: [{}]", names.join(", "));
-    (r, first.addr.clone())
+
+    if let Some(p) = prev {
+        names.insert(0, p.name.to_string());
+        if !cfg.proxy.is_empty() {
+            names.insert(0, "proxy".to_string());
+        }
+        return Some(models::ProxyChain {
+            next: p.addr.to_string(),
+            headers,
+            hashes,
+            names,
+        });
+    }
+    return None;
 }
 
 #[cfg(test)]
@@ -112,30 +139,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn append_node_test() {
+    fn make_chain_test() {
+        let mut cfg = models::ClientConfigs::default();
+
         let target = "bing.com:443";
         let tail = models::HeaderFrame {
             cmd: models::Cmds::Connect,
-            desc: "".to_string(),
             param: target.to_string(),
+            padding: utils::rand_padding(),
         };
 
-        let servs = vec![models::ServerInfo {
+        let (serv_pub, _) = utils::generate_x25519_keypair();
+        cfg.relays = vec![models::ServerInfo {
             name: "hello".to_string(),
             addr: "ws://127.0.0.1:1234".to_string(),
-            key: "123456".to_string(),
+            pubkey: serv_pub.to_string(),
         }];
 
-        let len = 4;
+        if let Some(chain) = make_chain(&cfg, tail) {
+            println!("names: [{}]", chain.names.join(", "));
+            println!("hashes len: {}", chain.hashes.len());
+            println!("headers len: {}", chain.headers.len());
 
-        let mut r = vec![];
-        let mut names = vec![];
-
-        let prev = append(&tail, &mut r, &mut names, None, &servs, len);
-
-        println!("chain: [{}]", names.join(", "));
-        assert_eq!(names.len(), len + 1);
-        assert!(!prev.is_none());
-        assert_eq!(prev.unwrap().key, servs[0].key);
+            assert_eq!(chain.headers.len(), cfg.length);
+        } else {
+            assert!(false);
+        }
     }
 }

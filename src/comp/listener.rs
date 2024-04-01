@@ -1,5 +1,5 @@
 use crate::{
-    comm::{infrs, models},
+    comm::{infrs, models, utils},
     comp::{dialer, http, socks5},
 };
 use async_std::{
@@ -38,12 +38,16 @@ pub fn serv(cfgs: models::ClientConfigs) {
     });
 }
 
-async fn handle_socks5_client(
-    stream: TcpStream,
-    cfg: &models::ClientConfigs,
-    methods: usize,
-) -> std::io::Result<()> {
-    let mut local = stream;
+async fn handle_socks5_client(mut local: TcpStream, cfg: &models::ClientConfigs) -> Result<()> {
+    let mut buff = vec![0u8; 2];
+
+    local.read_exact(&mut buff[..]).await?;
+    if buff[0] != 0x05 {
+        let msg = format!("unsupported socks version: {}", buff[0]);
+        return Err(Error::Protocol(msg.into()));
+    }
+
+    let methods = buff[1] as usize;
     let (cmd, dest) = socks5::do_socks5_handshake(&mut local, methods).await?;
     let _ = match cmd {
         models::Cmds::Connect => handle_socks5_connect(local, cfg, dest).await,
@@ -54,19 +58,9 @@ async fn handle_socks5_client(
     return Ok(());
 }
 
-async fn handle_http_client(
-    stream: TcpStream,
-    cfg: &models::ClientConfigs,
-    pkg: Vec<u8>,
-) -> Result<()> {
+async fn handle_http_client(mut local: TcpStream, cfg: &models::ClientConfigs) -> Result<()> {
     let mut buff = vec![0u8; BUFF_LEN];
-    buff[0] = pkg[0];
-    buff[1] = pkg[1];
-
-    let mut local = stream;
-    let mut n = local.read(&mut buff[2..]).await?;
-    n += 2;
-
+    let n = local.read(&mut buff).await?;
     let header = &buff[0..n];
     let addr = http::parse_header(header)?;
 
@@ -81,53 +75,47 @@ async fn handle_http_client(
         let msg = Message::binary(header);
         remote.send(msg).await?;
     }
-    infrs::pump_tcp_ws(local, remote).await;
+    infrs::pump_ws_tcp(local, remote).await;
     return Ok(());
 }
 
-async fn handle_client(cfgs: Arc<models::ClientConfigs>, stream: TcpStream) -> Result<()> {
-    let cfg = &*cfgs;
-    let mut buff = vec![0u8; 3];
-    let mut local = stream;
-    local.read_exact(&mut buff[0..2]).await?;
+async fn handle_client(cfgs: Arc<models::ClientConfigs>, mut local: TcpStream) -> Result<()> {
+    let mut buff = vec![0u8; 2];
+    let n = local.peek(&mut buff[0..1]).await?;
+    if n < 1 {
+        local.close().await?;
+        return Err(Error::ConnectionClosed);
+    }
 
     let first = buff[0];
-    if first == 0x05 {
-        let methods = buff[1] as usize;
-        handle_socks5_client(local, cfg, methods).await?;
-        return Ok(());
+    let cfg = &*cfgs;
+    match buff[0] {
+        0x05 => handle_socks5_client(local, cfg).await,
+        b'C' | b'G' => handle_http_client(local, cfg).await,
+        _ => {
+            let msg = format!("unknow header: [{first}]");
+            Err(Error::Protocol(msg.into()))
+        }
     }
-
-    let second = buff[1];
-    if (first == b'C' && second == b'O') || (first == b'G' && second == b'E') {
-        handle_http_client(local, cfg, buff).await?;
-        return Ok(());
-    }
-
-    return Err(Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        format!("unsupported header: [{first}, {second}]"),
-    )));
 }
 
 async fn handle_bind(local: TcpStream, cfgs: &models::ClientConfigs, dest: String) -> Result<()> {
     let remote = dialer::dial(&cfgs, models::Cmds::Bind, &dest).await?;
     info!("bind to {} ok", dest);
-    infrs::pump_tcp_ws(local, remote).await;
+    infrs::pump_ws_tcp(local, remote).await;
     return Ok(());
 }
 
 async fn handle_socks5_connect(
-    local: TcpStream,
+    mut writer: TcpStream,
     cfgs: &models::ClientConfigs,
     dest: String,
 ) -> Result<()> {
     info!("connect to {}", dest);
-    let mut writer = local;
     match dialer::dial(&cfgs, models::Cmds::Connect, &dest).await {
         Ok(remote) => {
             socks5::reply(&mut writer, 0x00).await;
-            let _ = infrs::pump_tcp_ws(writer, remote).await;
+            let _ = infrs::pump_ws_tcp(writer, remote).await;
         }
         Err(e) => {
             socks5::reply(&mut writer, 0x05).await;
@@ -149,7 +137,7 @@ async fn handle_udp_assoc(
     if let Ok(socket) = UdpSocket::bind(expt).await {
         if let Ok(addr) = socket.local_addr() {
             let mut resp = vec![0x05u8, 0x00, 0x00];
-            let mut bytes = infrs::socket_addr_to_vec(addr);
+            let mut bytes = utils::addr_to_vec(addr);
             resp.append(&mut bytes);
             debug!("bind udp addr: {:?}", resp);
             if let Ok(_) = writer.write(&resp).await {
@@ -165,7 +153,7 @@ async fn handle_udp_assoc(
                 match dialer::dial(cfgs, models::Cmds::UdpAssoc, &"").await {
                     Ok(ws_stream) => {
                         debug!("pumping...");
-                        let _ = infrs::pump_udp_ws(socket, ws_stream, sig_recv).await;
+                        let _ = infrs::pump_ws_udp_local_client(socket, ws_stream, sig_recv).await;
                         return Ok(());
                     }
                     _ => {}

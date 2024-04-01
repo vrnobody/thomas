@@ -6,3 +6,5 @@ cargo build --bin server
 # release
 # cargo build --release --bin client
 # cargo build --release --bin server
+
+# cargo test <name of test> ...
