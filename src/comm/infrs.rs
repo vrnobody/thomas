@@ -6,7 +6,10 @@ use async_std::{
 };
 use async_tungstenite::{
     async_std::ConnectStream,
-    tungstenite::{Error, Message, Result},
+    tungstenite::{
+        protocol::{frame::coding::CloseCode, CloseFrame},
+        Error, Message, Result,
+    },
     WebSocketStream,
 };
 use futures::{
@@ -222,6 +225,14 @@ async fn copy_ws_udp_from_remote_host(
         }
         break;
     }
+}
+
+pub async fn close_ws_stream(mut websocket: WebSocketStream<ConnectStream>) {
+    let close_frame = CloseFrame {
+        code: CloseCode::Away,
+        reason: Default::default(),
+    };
+    let _ = timeout(CONN_TIMEOUT, websocket.close(Some(close_frame))).await;
 }
 
 pub async fn pump_ws_udp_remote_host(

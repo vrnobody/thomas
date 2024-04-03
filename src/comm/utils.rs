@@ -142,8 +142,8 @@ pub fn parse_cmd_args(is_server: bool) -> Option<String> {
 
     if matches.occurrences_of("key") > 0 {
         let (pubkey, prikey) = generate_x25519_keypair();
-        println!("Public: {pubkey}");
-        println!("Secret: {prikey}");
+        println!("pubkey: {pubkey}");
+        println!("secret: {prikey}");
         return None;
     }
 

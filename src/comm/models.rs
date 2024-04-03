@@ -154,24 +154,40 @@ impl Default for ClientConfigs {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
     #[test]
-    fn enc_test() {
-        /*
-        let key = "123456你好,wrold!".to_string();
+    fn header_tests() {
+        let (pk1, pri1) = utils::generate_x25519_keypair();
 
-        let header = HeaderFrame {
-            cmd: crate::comm::models::Cmds::Relay,
-            param: "wss://b中aid文u.com/wspath".to_string(),
+        let serv = ServerInfo {
+            name: "test".to_string(),
+            addr: "ws://127.0.0.1:3001".to_string(),
+            pubkey: pk1.to_string(),
         };
 
-        let enc_txt = header.encrypt(&key).unwrap();
-        let dec = HeaderFrame::decrypt(&enc_txt, &key).unwrap();
+        let hf = serv.to_header_frame();
 
-        assert_eq!(dec.param, header.param);
-        assert_eq!(dec.cmd, header.cmd);
-        */
-        assert!(true);
+        let (pk2, _) = utils::generate_x25519_keypair();
+        let secret1 = utils::b64_to_secret(&pri1).unwrap();
+        let pubkey1 = utils::b64_to_pubkey(&pk1).unwrap();
+
+        let pubkey2 = utils::b64_to_pubkey(&pk2).unwrap();
+        let bytes = secret1.diffie_hellman(&pubkey2).to_bytes();
+        let key = base64::encode(&bytes);
+
+        let (ehf, hash) = hf.encrypt(&key, &pubkey1.to_bytes()).unwrap();
+        let (hf2, hash2) = ehf.decrypt(&key).unwrap();
+
+        let (ehf2, hash3) = hf2.encrypt(&key, &pubkey1.to_bytes()).unwrap();
+
+        assert!(hash.eq(&hash2));
+        assert!(hash.eq(&hash3));
+        let se = ehf.to_string().unwrap();
+        let se2 = ehf2.to_string().unwrap();
+        assert!(!se.eq(&se2));
+        assert_eq!(hf.cmd, hf2.cmd);
+        assert_eq!(hf.param, hf2.param);
+        assert_eq!(hf.padding, hf2.padding);
     }
 }

@@ -7,46 +7,31 @@
         {
             "name": "In1",
             "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
+            "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4="
         }
     ],
     "outlets": [
         {
             "name": "Out1",
             "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
+            "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4="
         }
     ],
     "relays": [
         {
             "name": "Serv1",
             "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
+            "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4="
         },
         {
             "name": "Serv2",
             "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
+            "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4="
         },
         {
             "name": "Serv3",
             "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
-        },
-        {
-            "name": "Serv4",
-            "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
-        },
-        {
-            "name": "Serv5",
-            "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
-        },
-        {
-            "name": "Serv6",
-            "addr": "ws://127.0.0.1:3001",
-            "key": "123456"
+            "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4="
         }
     ]
 }

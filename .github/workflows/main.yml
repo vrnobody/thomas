@@ -8,28 +8,30 @@ on:
 
 env:
   projName: Thomas
-  verStr: '1.1.2'
   desc: '数空格数到吐血，这就是对人类友好吗？❤了❤了'
 
 jobs:
   create_release:
-    name: Create release
+    name: Prepare
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
+      - name: Get app version from Cargo.toml
+        id: gettomlver
+        uses: dante-signal31/rust-app-version@v1.2.0
+
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
-          name: 'v${{ env.verStr }}'
+          tag_name: ${{ steps.gettomlver.outputs.app_version }}
+          name: '${{ env.projName }} v${{ steps.gettomlver.outputs.app_version }}'
           draft: true
           prerelease: false
 
   build_ubuntu:
-    name: build unix binaries
+    name: Build unix binaries
     needs: create_release
 
     strategy:
@@ -61,14 +63,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
+          tag_name: ${{ steps.gettomlver.outputs.app_version }}
           draft: true
           prerelease: false
           files: |
             thomas-linux-*.zip
 
   build_windows:
-    name: build windows binaries
+    name: Build windows binaries
     runs-on: windows-2019
     needs: create_release
 
@@ -87,7 +89,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.verStr }}
+          tag_name: ${{ steps.gettomlver.outputs.app_version }}
           draft: true
           prerelease: false
           files: |

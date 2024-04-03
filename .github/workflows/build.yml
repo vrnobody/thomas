@@ -11,7 +11,7 @@ env:
 
 jobs:
   build_ubuntu:
-    name: build unix binaries
+    name: Build unix binaries
 
     strategy:
       matrix:
@@ -37,7 +37,7 @@ jobs:
           zip -q -j thomas-linux-${left}.zip target/${tag}/release/server target/${tag}/release/client
 
   build_windows:
-    name: build windows binaries
+    name: Build windows binaries
     runs-on: windows-2019
 
     steps:        

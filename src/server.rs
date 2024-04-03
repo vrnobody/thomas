@@ -11,6 +11,11 @@ fn main() {
     }
 
     let cfg = parse_args_for_server(&config.unwrap());
+    if !comm::utils::is_keypair(&cfg.secret, &cfg.pubkey) {
+        println!("invalid keypair!\nplease run \"server --key\" to generate new keypair");
+        std::process::exit(2);
+    }
+
     comm::logging::init(&cfg.loglevel);
     openssl_probe::init_ssl_cert_env_vars();
     comm::utils::register_ctrl_c_handler();

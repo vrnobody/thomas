@@ -1,7 +1,8 @@
 use crate::{
-    comm::{models, utils},
+    comm::{cons::CONN_TIMEOUT, infrs, models, utils},
     comp,
 };
+use async_std::{future::timeout, stream::StreamExt};
 use async_tungstenite::{
     async_std::{client_async_tls, connect_async, ConnectStream},
     tungstenite::{Error, Message, Result},
@@ -25,7 +26,7 @@ pub async fn dial(
     match dial_core(&cfg, tail).await {
         Ok(s) => Ok(s),
         Err(e) => {
-            info!("failed to connect: {} {}", target, e);
+            info!("failed to connect {}", target);
             Err(e)
         }
     }
@@ -40,12 +41,13 @@ async fn dial_core(
         warn!("can not create proxy chain");
         return Err(Error::ConnectionClosed);
     }
+
     let chain = make_chain_result.unwrap();
     info!("chain: [{}]", chain.names.join(", "));
 
     let conn;
     if cfg.proxy.is_empty() {
-        conn = connect_async(&chain.next).await;
+        conn = timeout(CONN_TIMEOUT, connect_async(&chain.next)).await;
     } else {
         // info!("host: {}", &first);
         let s5tcp = comp::proxy::InnerProxy::from_proxy_str(&cfg.proxy)
@@ -54,17 +56,35 @@ async fn dial_core(
             .await
             .unwrap()
             .into_inner();
-        conn = client_async_tls(&chain.next, s5tcp).await;
+        conn = timeout(CONN_TIMEOUT, client_async_tls(&chain.next, s5tcp)).await;
     }
-    let (mut ws_stream, _) = conn?;
-    for enc_header in chain.headers {
-        if let Some(text) = enc_header.to_string() {
-            let msg = Message::text(text);
-            ws_stream.send(msg).await?;
-            // todo: check server feedback
+    if let Ok(Ok((mut ws_stream, _))) = conn {
+        for i in 0..chain.headers.len() {
+            if let Some(header) = chain.headers[i].to_string() {
+                if let Ok(_) = timeout(CONN_TIMEOUT, ws_stream.send(Message::text(header))).await {
+                    if let Ok(Some(Ok(msg))) = timeout(CONN_TIMEOUT, ws_stream.next()).await {
+                        let hash = msg.into_data();
+                        if chain.hashes[i].eq(&hash) {
+                            continue;
+                        } else {
+                            warn!("proxy [{}] reply with incorrect hash", chain.names[i]);
+                        }
+                    } else {
+                        warn!("read hash error");
+                    }
+                } else {
+                    warn!("send header error");
+                }
+            } else {
+                warn!("failed to serialize header");
+            }
+            infrs::close_ws_stream(ws_stream).await;
+            return Err(Error::ConnectionClosed);
         }
+        return Ok(ws_stream);
     }
-    Ok(ws_stream)
+    warn!("fail to connect proxy server");
+    return Err(Error::ConnectionClosed);
 }
 
 fn make_chain(

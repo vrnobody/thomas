@@ -8,6 +8,7 @@ use async_std::{
     sync::Arc,
     task,
 };
+use async_tungstenite::accept_async;
 use async_tungstenite::{
     async_std::{connect_async, ConnectStream},
     stream::Stream,
@@ -117,8 +118,8 @@ async fn handle_cmd(local: WebSocketStream<ConnectStream>, header: models::Heade
 async fn read_one_message(
     ws_stream: &mut WebSocketStream<ConnectStream>,
     secret: Arc<StaticSecret>,
-) -> Option<models::HeaderFrame> {
-    if let Some(Ok(msg)) = ws_stream.next().await {
+) -> Option<(models::HeaderFrame, Vec<u8>)> {
+    if let Ok(Some(Ok(msg))) = timeout(CONN_TIMEOUT, ws_stream.next()).await {
         if msg.is_text() {
             if let Ok(text) = msg.into_text() {
                 if let Ok(encrypted) = serde_json::from_str::<models::EncHeader>(&text) {
@@ -126,15 +127,7 @@ async fn read_one_message(
                     let their_pubkey = PublicKey::from(encrypted.pubkey.clone());
                     let bytes = secret.diffie_hellman(&their_pubkey).to_bytes();
                     let key = base64::encode(&bytes);
-                    if let Some((header, _)) = encrypted.decrypt(&key) {
-                        /*
-                        println!(
-                            "decrypted header: [{:?}] -> [{}]",
-                            &header.cmd, &header.param
-                        );
-                        */
-                        return Some(header);
-                    }
+                    return encrypted.decrypt(&key);
                 }
             }
         }
@@ -147,10 +140,17 @@ async fn accept_ws_conn(
     tcp_stream: TcpStream,
 ) -> Result<(WebSocketStream<ConnectStream>, models::HeaderFrame)> {
     let stream = Stream::Plain(tcp_stream);
-    let mut ws_stream = async_tungstenite::accept_async(stream).await?;
-    if let Some(header) = read_one_message(&mut ws_stream, secret).await {
-        return Ok((ws_stream, header));
+    if let Ok(Ok(mut ws_stream)) = timeout(CONN_TIMEOUT, accept_async(stream)).await {
+        if let Some((header, hash)) = read_one_message(&mut ws_stream, secret).await {
+            let msg = Message::binary(hash);
+            if let Ok(_) = timeout(CONN_TIMEOUT, ws_stream.send(msg)).await {
+                return Ok((ws_stream, header));
+            }
+        } else {
+            infrs::close_ws_stream(ws_stream).await;
+        }
     }
+    info!("parse header failed");
     Err(Error::ConnectionClosed)
 }
 
@@ -165,9 +165,12 @@ pub fn serv(cfgs: models::ServerConfigs) {
         while let Ok((stream, _)) = socket.accept().await {
             let s = secret.clone();
             task::spawn(async move {
-                let conn = accept_ws_conn(s, stream);
-                if let Ok(Ok((ws_stream, header))) = timeout(CONN_TIMEOUT, conn).await {
+                if let Ok(Ok((ws_stream, header))) =
+                    timeout(CONN_TIMEOUT, accept_ws_conn(s, stream)).await
+                {
                     let _ = handle_cmd(ws_stream, header).await;
+                } else {
+                    info!("connection closed");
                 }
             });
         }

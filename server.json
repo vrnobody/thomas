@@ -1,5 +1,6 @@
 {
     "loglevel": "info",
     "listen": "127.0.0.1:3001",
-    "key": "123456"
+    "pubkey": "cyBvyuctYPhWQmKQgHLT9tvoTMt2ujt3115UzehBhX4=",
+    "secret": "v16H1K1N/zP+WU4MxlLY9/RcdOSKKC8pcMpJchHIqBw="
 }
