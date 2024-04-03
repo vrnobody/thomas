@@ -16,21 +16,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
-      app_version: ${{ steps.gettomlver.outputs.app_version }}
+      app_version: ${{ steps.read_toml.outputs.value }}
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
 
-      - name: Get app version from Cargo.toml
-        id: gettomlver
-        uses: dante-signal31/rust-app-version@v1.2.0
+      - name: Get version from Cargo.toml
+        uses: SebRollen/toml-action@v1.0.2
+        id: read_toml
+        with:
+          file: 'Cargo.toml'
+          field: 'package.version'
 
       - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ steps.gettomlver.outputs.app_version }}
-          name: '${{ env.projName }} v${{ steps.gettomlver.outputs.app_version }}'
+          tag_name: ${{ steps.read_toml.outputs.value }}
+          name: '${{ env.projName }} v${{ steps.read_toml.outputs.value }}'
           draft: true
           prerelease: false
 
