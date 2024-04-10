@@ -29,10 +29,10 @@ pub struct EncHeader {
 }
 
 impl EncHeader {
-    pub fn decrypt(&self, key: &str) -> Option<(HeaderFrame, Vec<u8>)> {
+    pub fn decrypt(&self, pubkey: &[u8; 32], key: &str) -> Option<(HeaderFrame, Vec<u8>)> {
         if let Some(text) = utils::aes_decrypt(&self.nonce, &self.ciphertext, key) {
             if let Ok(header) = serde_json::from_str(&text) {
-                let hash = utils::sha256(&format!("{key}{text}"));
+                let hash = utils::sha256(&format!("{pubkey:?}{text}"));
                 return Some((header, hash));
             }
         }
@@ -63,10 +63,10 @@ pub struct HeaderFrame {
 }
 
 impl HeaderFrame {
-    pub fn encrypt(&self, key: &str, pubkey: &[u8; 32]) -> Option<(EncHeader, Vec<u8>)> {
+    pub fn encrypt(&self, pubkey: &[u8; 32], key: &str) -> Option<(EncHeader, Vec<u8>)> {
         if let Ok(text) = serde_json::to_string(self) {
             if let Some((nonce, ciphertext)) = utils::aes_encrypt(&text, key) {
-                let hash = utils::sha256(&format!("{key}{text}"));
+                let hash = utils::sha256(&format!("{pubkey:?}{text}"));
                 return Some((
                     EncHeader {
                         nonce,
@@ -176,10 +176,10 @@ mod tests {
         let bytes = secret1.diffie_hellman(&pubkey2).to_bytes();
         let key = base64::encode(&bytes);
 
-        let (ehf, hash) = hf.encrypt(&key, &pubkey1.to_bytes()).unwrap();
-        let (hf2, hash2) = ehf.decrypt(&key).unwrap();
+        let (ehf, hash) = hf.encrypt(&pubkey1.to_bytes(), &key).unwrap();
+        let (hf2, hash2) = ehf.decrypt(&ehf.pubkey, &key).unwrap();
 
-        let (ehf2, hash3) = hf2.encrypt(&key, &pubkey1.to_bytes()).unwrap();
+        let (ehf2, hash3) = hf2.encrypt(&pubkey1.to_bytes(), &key).unwrap();
 
         assert!(hash.eq(&hash2));
         assert!(hash.eq(&hash3));

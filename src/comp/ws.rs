@@ -127,7 +127,7 @@ async fn read_one_message(
                     let their_pubkey = PublicKey::from(encrypted.pubkey.clone());
                     let bytes = secret.diffie_hellman(&their_pubkey).to_bytes();
                     let key = base64::encode(&bytes);
-                    return encrypted.decrypt(&key);
+                    return encrypted.decrypt(&encrypted.pubkey, &key);
                 }
             }
         }

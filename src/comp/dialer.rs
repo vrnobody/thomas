@@ -129,7 +129,7 @@ fn make_chain(
 
             let bytes = secret.diffie_hellman(&their_pubkey).to_bytes();
             let key = base64::encode(&bytes);
-            if let Some((enc_header, hash)) = frame.encrypt(&key, &pubkey) {
+            if let Some((enc_header, hash)) = frame.encrypt(&pubkey, &key) {
                 headers.insert(0, enc_header);
                 hashes.insert(0, hash);
                 names.insert(0, name.to_string());

@@ -57,3 +57,6 @@ client.json说明
 
 #### 编译
 [Release](https://github.com/vrnobody/thomas/releases/latest)页面有编译好的Windows、Linux、ARM等二进制文件。其他架构需自行安装Rust，执行`cargo build --release`进行编译。最后生成的可执行文件位于`target/release`目录内。系统需要安装openssl v1.*。  
+  
+[update logs](https://github.com/vrnobody/thomas/blob/main/update-logs.json)  
+  
